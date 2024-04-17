@@ -1,9 +1,14 @@
 const axios = require('axios')
 const fetch = require('node-fetch');
 require("dotenv").config()
+const Redis = require('redis')
 
 const drinksApi = process.env.DRINK_PUBLIC_KEY
 const dbEndpoint = process.env.APP_DB_GET_KEY
+
+const redisClient = Redis.createClient() // in production const client = Redis.createClient({ url })
+const DEFAULT_EXPIRATION = 3600
+
 
 var date = new Date()
 var year = date.getFullYear();
@@ -12,6 +17,7 @@ var day = date.getDate();
 var dd = String(day).padStart(2, '0');
 var mm = String(month + 1).padStart(2, '0'); //January is 0!
 let today = `${year}-${mm}-${dd}`
+
 
 const fetchDrinkApiData = async () =>{
     let allDrinksInApi;
@@ -25,6 +31,7 @@ const fetchDrinkApiData = async () =>{
   }
 
 ;
+
 
 const fetchDbData = async () =>{
     let fetchData;
@@ -60,13 +67,10 @@ const findRandom = () => {
             for (const element of shuffleDrinks){
                 if (!res.includes(element)){
                     dod = element
-                    console.log('findRandom dod', dod)
                     updateDb(dod)
                     break
                 }
-            }
-            console.log('findRandom dod 2', dod)
-            
+            }            
         })
     })
 }
@@ -79,7 +83,7 @@ const updateDb = async (dod) =>{
         // Make an HTTP POST request to the /saveDrinkandDates endpoint
         const requestBody = {
             name: newDrink,
-            theDate: today,
+            theDate:`${year}-${mm}-${dd}`,
         };
 
         const response = await fetch('http://localhost:3001/saveDrinkandDates', {
