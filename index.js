@@ -20,11 +20,16 @@ mongoose.connect(urlDB)
 
 const axios = require('axios')
 const Redis = require('redis')
+
 const drinksApi = process.env.DRINK_PUBLIC_KEY
 const allCocktailsAPi = process.env.ALL_COCKTAILS_API_KEY
 const mustKnowApi = process.env.DRINK_MUST_KNOWS_KEY
 const allShotsApi = process.env.ALL_SHOTS_API_KEY
-const redisClient = Redis.createClient({legacyMode: true}) // in production const client = Redis.createClient({ url })
+const drinksAPIKey = process.env.APP_API_KEY
+
+const tokenRequest = process.env.APP_JWT_REQUST
+
+const redisClient = Redis.createClient({ legacyMode: true }) // in production const client = Redis.createClient({ url })
 const DEFAULT_EXPIRATION = 3600
 
 
@@ -39,21 +44,21 @@ app.get("/getDrinkandDates", (req, res) => {
 
 })
 
-const job = schedule.scheduleJob('00 03 * * *', function(){
+const job = schedule.scheduleJob('00 03 * * *', function () {
     findRandom()
     console.log('called at 3:00AM')
     schedule.gracefulShutdown()
 })
 
 
-app.get("/getLastEntry", async (req, res)=> {
-    await DodModel.find().sort({ _id: -1}).limit(1).exec()
-    .then(results => {
-        res.json(results[0].toObject())
-    })
-    .catch(error => {
-        res.json(error)
-    });
+app.get("/getLastEntry", async (req, res) => {
+    await DodModel.find().sort({ _id: -1 }).limit(1).exec()
+        .then(results => {
+            res.json(results[0].toObject())
+        })
+        .catch(error => {
+            res.json(error)
+        });
 })
 
 app.post("/saveDrinkandDates", async (req, res) => {
@@ -65,23 +70,48 @@ app.post("/saveDrinkandDates", async (req, res) => {
 
 })
 
-
-
-app.get("/drinks", async (req, res) => {
+app.post("/token/", async (req, res) => {
     const drinkId = req.query.drinkId
-    
 
     redisClient.get("drinks", async (error, drinks) => {
         if (error) {
             console.error(error)
             await redisClient.connect()
         }
-        if (drinks != null){
+        if (drinks != null) {
+            console.log('no token request')
             return res.json(JSON.parse(drinks))
-           
+
         } else {
-            const { data: response } = await axios.get(drinksApi, {params: { drinkId }}) 
-            redisClient.SETEX('drinks', DEFAULT_EXPIRATION, JSON.stringify(response)) 
+            console.log('token request')
+            const { data: response } = await axios.get(tokenRequest, { params: { drinkId } })
+            redisClient.SETEX('token', DEFAULT_EXPIRATION, JSON.stringify(response))
+            res.json(response)
+        }
+    })
+
+
+})
+
+
+
+app.get("/drinks", async (req, res) => {
+    const drinkId = req.query.drinkId
+
+    redisClient.get("drinks", async (error, drinks) => {
+        if (error) {
+            console.error(error)
+            await redisClient.connect()
+        }
+        if (drinks != null) {
+            console.log('in cache')
+            return res.json(JSON.parse(drinks))
+
+        } else {
+            console.log('not in cache need to add')
+            const { data: response } = await axios.get(drinksApi,
+                { headers: { 'Authorization': `Api-Key ${drinksAPIKey}` } }, { params: { drinkId } })
+            redisClient.SETEX('drinks', DEFAULT_EXPIRATION, JSON.stringify(response))
             res.json(response)
         }
     })
@@ -90,19 +120,19 @@ app.get("/drinks", async (req, res) => {
 
 app.get("/cocktails", async (req, res) => {
     const drinkId = req.query.drinkId
-    
+
 
     redisClient.get("cocktails", async (error, cocktails) => {
         if (error) {
             console.error(error)
             await redisClient.connect()
         }
-        if (cocktails != null){
+        if (cocktails != null) {
             return res.json(JSON.parse(cocktails))
-           
+
         } else {
-            const { data: response } = await axios.get(allCocktailsAPi, {params: { drinkId }}) 
-            redisClient.SETEX('cocktails', DEFAULT_EXPIRATION, JSON.stringify(response)) 
+            const { data: response } = await axios.get(allCocktailsAPi, { headers: { 'Authorization': `Api-Key ${drinksAPIKey}` } }, { params: { drinkId } })
+            redisClient.SETEX('cocktails', DEFAULT_EXPIRATION, JSON.stringify(response))
             res.json(response)
         }
     })
@@ -116,15 +146,15 @@ app.get("/must-knows", async (req, res) => {
             console.error(error)
             await redisClient.connect()
         }
-        if (mustKnows != null){
+        if (mustKnows != null) {
             return res.json(JSON.parse(mustKnows))
-           
+
         } else {
-            const { data: response } = await axios.get(mustKnowApi, {params: { drinkId }}) 
-            redisClient.SETEX('must-knows', DEFAULT_EXPIRATION, JSON.stringify(response)) 
+            const { data: response } = await axios.get(mustKnowApi, { headers: { 'Authorization': `Api-Key ${drinksAPIKey}` } }, { params: { drinkId } })
+            redisClient.SETEX('must-knows', DEFAULT_EXPIRATION, JSON.stringify(response))
             res.json(response)
         }
-        
+
 
     })
 
@@ -138,22 +168,23 @@ app.get("/shot", async (req, res) => {
             console.error(error)
             await redisClient.connect()
         }
-        if (shots != null){
+        if (shots != null) {
             return res.json(JSON.parse(shots))
-           
+
         } else {
-            const { data: response } = await axios.get(allShotsApi, {params: { drinkId }}) 
-            redisClient.SETEX('shot', DEFAULT_EXPIRATION, JSON.stringify(response)) 
+            const { data: response } = await axios.get(allShotsApi, { headers: { 'Authorization': `Api-Key ${drinksAPIKey}` } }, { params: { drinkId } })
+            redisClient.SETEX('shot', DEFAULT_EXPIRATION, JSON.stringify(response))
             res.json(response)
         }
-        
+
 
     })
 
 })
 
 
-  
+
+
 app.listen(3001, () => {
     console.log('Server Running...')
 })
