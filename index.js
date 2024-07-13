@@ -26,11 +26,14 @@ const allCocktailsAPi = process.env.ALL_COCKTAILS_API_KEY
 const mustKnowApi = process.env.DRINK_MUST_KNOWS_KEY
 const allShotsApi = process.env.ALL_SHOTS_API_KEY
 const drinksAPIKey = process.env.APP_API_KEY
+const drinksAPIKeyProduction = process.env.PRODUCTION_KEY
 
-const tokenRequest = process.env.APP_JWT_REQUST
+
+// const tokenRequest = process.env.APP_JWT_REQUST
 
 const redisClient = Redis.createClient({ legacyMode: true }) // in production const client = Redis.createClient({ url })
 const DEFAULT_EXPIRATION = 3600
+
 
 
 app.get("/getDrinkandDates", (req, res) => {
@@ -94,7 +97,6 @@ app.post("/token/", async (req, res) => {
 })
 
 
-
 app.get("/drinks", async (req, res) => {
     const drinkId = req.query.drinkId
 
@@ -104,15 +106,14 @@ app.get("/drinks", async (req, res) => {
             await redisClient.connect()
         }
         if (drinks != null) {
-            console.log('in cache')
             return res.json(JSON.parse(drinks))
 
         } else {
-            console.log('not in cache need to add')
             const { data: response } = await axios.get(drinksApi,
-                { headers: { 'Authorization': `Api-Key ${drinksAPIKey}` } }, { params: { drinkId } })
+                { headers: { 'Authorization': `Api-Key ${drinksAPIKeyProduction}` } }, { params: { drinkId } })
             redisClient.SETEX('drinks', DEFAULT_EXPIRATION, JSON.stringify(response))
             res.json(response)
+            console.log('response', response)
         }
     })
 
@@ -131,7 +132,7 @@ app.get("/cocktails", async (req, res) => {
             return res.json(JSON.parse(cocktails))
 
         } else {
-            const { data: response } = await axios.get(allCocktailsAPi, { headers: { 'Authorization': `Api-Key ${drinksAPIKey}` } }, { params: { drinkId } })
+            const { data: response } = await axios.get(allCocktailsAPi, { headers: { 'Authorization': `Api-Key ${drinksAPIKeyProduction}` } }, { params: { drinkId } })
             redisClient.SETEX('cocktails', DEFAULT_EXPIRATION, JSON.stringify(response))
             res.json(response)
         }
@@ -150,7 +151,7 @@ app.get("/must-knows", async (req, res) => {
             return res.json(JSON.parse(mustKnows))
 
         } else {
-            const { data: response } = await axios.get(mustKnowApi, { headers: { 'Authorization': `Api-Key ${drinksAPIKey}` } }, { params: { drinkId } })
+            const { data: response } = await axios.get(mustKnowApi, { headers: { 'Authorization': `Api-Key ${drinksAPIKeyProduction}` } }, { params: { drinkId } })
             redisClient.SETEX('must-knows', DEFAULT_EXPIRATION, JSON.stringify(response))
             res.json(response)
         }
@@ -172,7 +173,7 @@ app.get("/shot", async (req, res) => {
             return res.json(JSON.parse(shots))
 
         } else {
-            const { data: response } = await axios.get(allShotsApi, { headers: { 'Authorization': `Api-Key ${drinksAPIKey}` } }, { params: { drinkId } })
+            const { data: response } = await axios.get(allShotsApi, { headers: { 'Authorization': `Api-Key ${drinksAPIKeyProduction}` } }, { params: { drinkId } })
             redisClient.SETEX('shot', DEFAULT_EXPIRATION, JSON.stringify(response))
             res.json(response)
         }

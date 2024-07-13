@@ -7,10 +7,10 @@ const { base } = require('./models/DoD');
 const drinksApi = process.env.DRINK_PUBLIC_KEY
 const dbEndpoint = process.env.APP_DB_GET_KEY
 const drinksAPIKey = process.env.APP_API_KEY
+const drinksAPIKeyProduction = process.env.PRODUCTION_KEY
 
 const redisClient = Redis.createClient() // in production const client = Redis.createClient({ url })
 const DEFAULT_EXPIRATION = 3600
-
 
 var date = new Date()
 var year = date.getFullYear();
@@ -21,33 +21,54 @@ var mm = String(month + 1).padStart(2, '0'); //January is 0!
 let today = `${year}-${mm}-${dd}`
 
 
-const fetchDrinkApiData = async () => {
-    let allDrinksInApi;
-    try {
-        const { data: response } = await axios.get(drinksApi, {
-            headers: {
-                'Authorization': `Api-Key ${drinksAPIKey}`
-            }
-        });
-        allDrinksInApi = response
-    } catch (error) {
-        console.error(error.message);
+const FetchPaginatedData = async (url, headers) => {
+
+    let apiData = [];
+    let nextUrl = url;
+
+    while (nextUrl) {
+        try {
+            const response = await axios.get(nextUrl, { headers });
+            apiData = [...apiData, ...response.data.results];
+            nextUrl = await response.data.next;
+
+        } catch (error) {
+            console.error("Error fetching paginated data", error);
+            nextUrl = null
+        }
+
     }
-    return allDrinksInApi
+    return apiData
 }
 
-    ;
+const headers = {
+    'Authorization': `Api-Key ${drinksAPIKeyProduction}`,
+    'Content-type': 'application/json'
+}
+
+const fetchDrinkApiData = async () => {
+    let allDrinksInApi = await FetchPaginatedData(drinksApi, headers)
+
+    return allDrinksInApi
+}
 
 
 const fetchDbData = async () => {
     let fetchData;
     try {
         const { data: response } = await axios.get(dbEndpoint);
-        fetchData = response
+        if (response) {
+            fetchData = response
+            return await fetchData.map((fd) => fd.drink_name)
+
+        } else {
+            return []
+
+        }
+
     } catch (error) {
         console.error(error.message);
     }
-    return fetchData.map((fd) => fd.name)
 }
 
 
@@ -61,26 +82,28 @@ const fishYatesShuffle = (arr) => {
 }
 
 
-// Selects Drink of the day and assigns it UpdateDb function.
-const findRandom = () => {
-    let testing = fetchDrinkApiData()
-    let pastDrinkNames = fetchDbData()
+// // Selects Drink of the day and assigns it UpdateDb function.
+const findRandom = async () => {
+    let allAPIDrinksData = await fetchDrinkApiData()
+    let pastDrinkNames = fetchDbData();
     let dod;
-    testing.then(function (result) {
-        const todaysDrink = result.map((td) => td.drink_name)
-        const shuffleDrinks = fishYatesShuffle([...todaysDrink]);
-        pastDrinkNames.then(function (res) {
-            for (const element of shuffleDrinks) {
-                if (!res.includes(element)) {
-                    dod = element
-                    updateDb(dod)
-                    break
-                }
+
+    const todaysDrink = allAPIDrinksData?.map((td) => td.drink_name)
+    const shuffleDrinks = todaysDrink ? fishYatesShuffle([...todaysDrink]) : [];
+    await pastDrinkNames.then(function (res) {
+        for (const element of shuffleDrinks) {
+            if (!res) {
+                updateDb(shuffleDrinks[0])
+            } else if (!res.includes(element)) {
+                dod = element
+                updateDb(dod)
+                break
             }
-        })
+        }
     })
 }
 
+findRandom()
 
 const updateDb = async (dod) => {
     try {
@@ -98,6 +121,7 @@ const updateDb = async (dod) => {
                 'Content-Type': 'application/json',
             },
             body: JSON.stringify(requestBody),
+
         });
 
         if (response.ok) {
