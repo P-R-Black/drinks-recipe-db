@@ -103,7 +103,6 @@ const findRandom = async () => {
     })
 }
 
-findRandom()
 
 const updateDb = async (dod) => {
     try {
